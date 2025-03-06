@@ -1,0 +1,64 @@
+name: PHP Composer CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-versions: [ "8.0", "8.1", "8.2" ] # Add PHP versions to test compatibility
+
+    steps:
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: Validate composer.json and composer.lock
+    - name: Validate composer.json and composer.lock
+      run: composer validate --strict
+
+    # Step 3: Cache Composer dependencies
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ matrix.php-versions }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-${{ matrix.php-versions }}-
+
+    # Step 4: Install dependencies
+    - name: Set up PHP with Composer
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-versions }}
+        tools: composer
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
+
+    # Step 5: Run Code Linting
+    - name: PHP CodeSniffer (PSR-12 Compliance Check)
+      run: vendor/bin/phpcs --standard=PSR12 src/ tests/
+
+    # Step 6: Run Static Analysis (Optional but recommended)
+    - name: PHPStan Static Analysis
+      run: vendor/bin/phpstan analyse src/ tests/ --level=max
+
+    # Step 7: Run Security Check
+    - name: Security Check with Composer
+      run: composer audit --no-interaction --ignore-platform-reqs
+
+    # Step 8: Run Test Suite
+    - name: Run test suite
+      run: composer run-script test
